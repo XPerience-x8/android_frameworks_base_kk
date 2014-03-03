@@ -145,14 +145,14 @@ final class ProcessList {
     // the OOM killer.  Note that the OOM killer only supports 6 slots, so we
     // can't give it a different value for every possible kind of process.
     private final int[] mOomAdj = new int[] {
-            FOREGROUND_APP_ADJ, VISIBLE_APP_ADJ, PERCEPTIBLE_APP_ADJ,
-            BACKUP_APP_ADJ, CACHED_APP_MIN_ADJ, CACHED_APP_MAX_ADJ
+            FOREGROUND_APP_ADJ, PERCEPTIBLE_APP_ADJ, SERVICE_ADJ,
+            PREVIOUS_APP_ADJ, CACHED_APP_MIN_ADJ, CACHED_APP_MAX_ADJ
     };
     // These are the low-end OOM level limits.  This is appropriate for an
     // HVGA or smaller phone with less than 512MB.  Values are in KB.
     private final long[] mOomMinFreeLow = new long[] {
-            8192, 12288, 16384,
-            24576, 28672, 32768
+            4096, 8192, 16384,
+            24576, 32768, 40960
     };
     // These are the high-end OOM level limits.  This is appropriate for a
     // 1280x800 or larger screen with around 1GB RAM.  Values are in KB.
@@ -473,6 +473,23 @@ final class ProcessList {
         PSS_SAME_CACHED_INTERVAL,       // ActivityManager.PROCESS_STATE_CACHED_EMPTY
     };
 
+    private static final long[] sSameSleepingPssTimes = new long[] {
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_PERSISTENT
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_PERSISTENT_UI
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_TOP
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_IMPORTANT_FOREGROUND
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_IMPORTANT_BACKGROUND
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_BACKUP
+        PSS_SAME_IMPORTANT_INTERVAL,    // ActivityManager.PROCESS_STATE_HEAVY_WEIGHT
+        PSS_SAME_SERVICE_INTERVAL,      // ActivityManager.PROCESS_STATE_SERVICE
+        PSS_SAME_SERVICE_INTERVAL,      // ActivityManager.PROCESS_STATE_RECEIVER
+        PSS_SAME_CACHED_INTERVAL,       // ActivityManager.PROCESS_STATE_HOME
+        PSS_SAME_CACHED_INTERVAL,       // ActivityManager.PROCESS_STATE_LAST_ACTIVITY
+        PSS_SAME_CACHED_INTERVAL,       // ActivityManager.PROCESS_STATE_CACHED_ACTIVITY
+        PSS_SAME_CACHED_INTERVAL,       // ActivityManager.PROCESS_STATE_CACHED_ACTIVITY_CLIENT
+        PSS_SAME_CACHED_INTERVAL,       // ActivityManager.PROCESS_STATE_CACHED_EMPTY
+    };
+
     public static boolean procStatesDifferForMem(int procState1, int procState2) {
         return sProcStateToProcMem[procState1] != sProcStateToProcMem[procState2];
     }
@@ -482,7 +499,7 @@ final class ProcessList {
         final long[] table = sleeping
                 ? (first
                         ? sFirstAwakePssTimes
-                        : sSameAwakePssTimes)
+                        : sSameSleepingPssTimes)
                 : (first
                         ? sFirstAwakePssTimes
                         : sSameAwakePssTimes);

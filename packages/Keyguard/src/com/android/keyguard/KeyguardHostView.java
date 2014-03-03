@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,6 +42,7 @@ import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.media.RemoteControlClient;
+import android.os.Bundle;
 import android.os.Looper;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -47,6 +50,7 @@ import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.telephony.MSimTelephonyManager;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.Slog;
@@ -54,6 +58,7 @@ import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewStub;
 import android.view.WindowManager;
 import android.widget.RemoteViews.OnClickHandler;
 
@@ -92,6 +97,8 @@ public class KeyguardHostView extends KeyguardViewBase {
     private int mAppWidgetToShow;
 
     private View mExpandChallengeView;
+
+    private boolean mDefaultAppWidgetAttached;
 
     protected OnDismissAction mDismissAction;
 
@@ -235,9 +242,16 @@ public class KeyguardHostView extends KeyguardViewBase {
         // that are triggered by deleteAppWidgetId, which is why we're doing this
         int[] appWidgetIdsInKeyguardSettings = mLockPatternUtils.getAppWidgets();
         int[] appWidgetIdsBoundToHost = mAppWidgetHost.getAppWidgetIds();
+        int fallbackWidgetId = mLockPatternUtils.getFallbackAppWidgetId();
         for (int i = 0; i < appWidgetIdsBoundToHost.length; i++) {
             int appWidgetId = appWidgetIdsBoundToHost[i];
             if (!contains(appWidgetIdsInKeyguardSettings, appWidgetId)) {
+                if (appWidgetId == fallbackWidgetId) {
+                    // Reset fallback widget id in the event that widgets have been
+                    // enabled, and fallback widget is being deleted
+                    mLockPatternUtils.writeFallbackAppWidgetId(
+                            AppWidgetManager.INVALID_APPWIDGET_ID);
+                }
                 Log.d(TAG, "Found a appWidgetId that's not being used by keyguard, deleting id "
                         + appWidgetId);
                 mAppWidgetHost.deleteAppWidgetId(appWidgetId);
@@ -430,7 +444,8 @@ public class KeyguardHostView extends KeyguardViewBase {
 
         // Don't let the user drag the challenge down if widgets are disabled.
         if (mSlidingChallengeLayout != null) {
-            mSlidingChallengeLayout.setEnableChallengeDragging(!widgetsDisabled());
+            mSlidingChallengeLayout.setEnableChallengeDragging(
+                    !widgetsDisabled() || mDefaultAppWidgetAttached);
         }
 
         // Select the appropriate page
@@ -467,11 +482,10 @@ public class KeyguardHostView extends KeyguardViewBase {
     }
 
     private boolean widgetsDisabled() {
-        boolean disabledByLowRamDevice = ActivityManager.isLowRamDeviceStatic();
         boolean disabledByDpm =
                 (mDisabledFeatures & DevicePolicyManager.KEYGUARD_DISABLE_WIDGETS_ALL) != 0;
         boolean disabledByUser = !mLockPatternUtils.getWidgetsEnabled();
-        return disabledByLowRamDevice || disabledByDpm || disabledByUser;
+        return disabledByDpm || disabledByUser;
     }
 
     private boolean cameraDisabledByDpm() {
@@ -970,6 +984,12 @@ public class KeyguardHostView extends KeyguardViewBase {
             final LayoutInflater inflater = LayoutInflater.from(mContext);
             if (DEBUG) Log.v(TAG, "inflating id = " + layoutId);
             View v = inflater.inflate(layoutId, mSecurityViewContainer, false);
+            if (KeyguardUpdateMonitor.sIsMultiSimEnabled) {
+                ViewStub vStub = (ViewStub) (v.findViewById(R.id.stub_msim_carrier_text));
+                if (vStub != null) {
+                    vStub.inflate();
+                }
+            }
             mSecurityViewContainer.addView(v);
             updateSecurityView(v);
             view = (KeyguardSecurityView)v;
@@ -1142,8 +1162,16 @@ public class KeyguardHostView extends KeyguardViewBase {
             case Password: return R.id.keyguard_password_view;
             case Biometric: return R.id.keyguard_face_unlock_view;
             case Account: return R.id.keyguard_account_view;
-            case SimPin: return R.id.keyguard_sim_pin_view;
-            case SimPuk: return R.id.keyguard_sim_puk_view;
+            case SimPin:
+                if (KeyguardUpdateMonitor.sIsMultiSimEnabled) {
+                    return R.id.msim_keyguard_sim_pin_view;
+                }
+                return R.id.keyguard_sim_pin_view;
+            case SimPuk:
+                if (KeyguardUpdateMonitor.sIsMultiSimEnabled) {
+                    return R.id.msim_keyguard_sim_puk_view;
+                }
+                return R.id.keyguard_sim_puk_view;
         }
         return 0;
     }
@@ -1156,8 +1184,16 @@ public class KeyguardHostView extends KeyguardViewBase {
             case Password: return R.layout.keyguard_password_view;
             case Biometric: return R.layout.keyguard_face_unlock_view;
             case Account: return R.layout.keyguard_account_view;
-            case SimPin: return R.layout.keyguard_sim_pin_view;
-            case SimPuk: return R.layout.keyguard_sim_puk_view;
+            case SimPin:
+                if (KeyguardUpdateMonitor.sIsMultiSimEnabled) {
+                    return R.layout.msim_keyguard_sim_pin_view;
+                }
+                return R.layout.keyguard_sim_pin_view;
+            case SimPuk:
+                if (KeyguardUpdateMonitor.sIsMultiSimEnabled) {
+                    return R.layout.msim_keyguard_sim_puk_view;
+                }
+                return R.layout.keyguard_sim_puk_view;
             default:
                 return 0;
         }
@@ -1167,6 +1203,10 @@ public class KeyguardHostView extends KeyguardViewBase {
         AppWidgetProviderInfo appWidgetInfo = mAppWidgetManager.getAppWidgetInfo(appId);
         if (appWidgetInfo != null) {
             AppWidgetHostView view = mAppWidgetHost.createView(mContext, appId, appWidgetInfo);
+            Bundle options = new Bundle();
+            options.putInt(AppWidgetManager.OPTION_APPWIDGET_HOST_CATEGORY,
+                AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD);
+            view.updateAppWidgetOptions(options);
             addWidget(view, pageIndex);
             return true;
         } else {
@@ -1303,7 +1343,6 @@ public class KeyguardHostView extends KeyguardViewBase {
 
     private void addWidgetsFromSettings() {
         if (mSafeModeEnabled || widgetsDisabled()) {
-            addDefaultStatusWidget(0);
             return;
         }
 
@@ -1362,13 +1401,13 @@ public class KeyguardHostView extends KeyguardViewBase {
 
             final boolean userAddedWidgetsEnabled = !widgetsDisabled();
 
-            boolean addedDefaultAppWidget = false;
+            mDefaultAppWidgetAttached = false;
 
             if (!mSafeModeEnabled) {
                 if (userAddedWidgetsEnabled) {
                     int appWidgetId = allocateIdForDefaultAppWidget();
                     if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                        addedDefaultAppWidget = addWidget(appWidgetId, insertPageIndex, true);
+                        mDefaultAppWidgetAttached = addWidget(appWidgetId, insertPageIndex, true);
                     }
                 } else {
                     // note: even if widgetsDisabledByDpm() returns true, we still bind/create
@@ -1381,8 +1420,8 @@ public class KeyguardHostView extends KeyguardViewBase {
                         }
                     }
                     if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                        addedDefaultAppWidget = addWidget(appWidgetId, insertPageIndex, false);
-                        if (!addedDefaultAppWidget) {
+                        mDefaultAppWidgetAttached = addWidget(appWidgetId, insertPageIndex, false);
+                        if (!mDefaultAppWidgetAttached) {
                             mAppWidgetHost.deleteAppWidgetId(appWidgetId);
                             mLockPatternUtils.writeFallbackAppWidgetId(
                                     AppWidgetManager.INVALID_APPWIDGET_ID);
@@ -1392,7 +1431,7 @@ public class KeyguardHostView extends KeyguardViewBase {
             }
 
             // Use the built-in status/clock view if we can't inflate the default widget
-            if (!addedDefaultAppWidget) {
+            if (!mDefaultAppWidgetAttached) {
                 addDefaultStatusWidget(insertPageIndex);
             }
 
@@ -1716,6 +1755,12 @@ public class KeyguardHostView extends KeyguardViewBase {
         return homeOverride;
     }
 
+    private boolean shouldEnableCameraKey() {
+        final boolean cameraOverride = Settings.System.getInt(getContext().getContentResolver(),
+                Settings.System.CAMERA_UNLOCK_SCREEN, 0) == 1;
+        return cameraOverride;
+    }
+
     public void goToWidget(int appWidgetId) {
         mAppWidgetToShow = appWidgetId;
         mSwitchPageRunnable.run();
@@ -1733,6 +1778,15 @@ public class KeyguardHostView extends KeyguardViewBase {
     public boolean handleHomeKey() {
         // The following enables the HOME key to work for testing automation
         if (shouldEnableHomeKey()) {
+            showNextSecurityScreenOrFinish(false);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean handleCameraKey() {
+        // The following enables the CAMERA key to work for testing automation
+        if (shouldEnableCameraKey()) {
             showNextSecurityScreenOrFinish(false);
             return true;
         }
