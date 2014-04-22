@@ -49,7 +49,7 @@ int main(int argc, char** argv)
     if (!noBootAnimation) {
 
 while (0 == system("pidof bootlogo > /dev/null")) {
-           LOGE("boologo is still running...");
+          // LOGE("boologo is still running...");
             sleep(1);
 
         }
