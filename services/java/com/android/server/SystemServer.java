@@ -344,9 +344,9 @@ class ServerThread {
             Slog.i(TAG, "Lights Service");
             lights = new LightsService(context);
 
-            Slog.i(TAG, "Battery Service");
-            battery = new BatteryService(context, lights);
-            ServiceManager.addService("battery", battery);
+//            Slog.i(TAG, "Battery Service");
+  //          battery = new BatteryService(context, lights);
+    //        ServiceManager.addService("battery", battery);
 
             Slog.i(TAG, "Vibrator Service");
             vibrator = new VibratorService(context);
