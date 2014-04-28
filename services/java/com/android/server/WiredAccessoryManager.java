@@ -343,7 +343,7 @@ final class WiredAccessoryManager implements WiredAccessoryCallbacks {
             if (!mUseDevInputEventForAudioJack) {
 // Monitor headset_sensor for sony msm7x27a otherwise fall back to h2w
 
-        uei = new UEventInfo("headset_sensor", BIT_HEADSET, BIT_HEADSET_NO_MIC)
+        uei = new UEventInfo("headset_sensor", BIT_HEADSET, BIT_HEADSET_NO_MIC);
                 if (uei.checkSwitchExists()) {
                     retVal.add(uei);
                 } else {
