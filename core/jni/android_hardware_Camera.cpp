@@ -385,7 +385,7 @@ void JNICameraContext::setCallbackMode(JNIEnv *env, bool installed, bool manualM
     }
 }
 
-static void android_hardware_Camera_setLongshot(JNIEnv *env, jobject thiz, jboolean enable)
+/*static void android_hardware_Camera_setLongshot(JNIEnv *env, jobject thiz, jboolean enable)
 {
     ALOGV("setLongshot");
 #if defined(QCOM_HARDWARE) && !defined(ICS_CAMERA_BLOB)
@@ -404,7 +404,7 @@ static void android_hardware_Camera_setLongshot(JNIEnv *env, jobject thiz, jbool
        jniThrowException(env, "java/lang/RuntimeException", "enabling longshot mode failed");
     }
 #endif
-}
+}*/
 
 static void android_hardware_Camera_sendHistogramData(JNIEnv *env, jobject thiz)
  {
@@ -707,9 +707,10 @@ static void android_hardware_Camera_setHasPreviewCallback(JNIEnv *env, jobject t
     context->setCallbackMode(env, installed, manualBuffer);
 }
 
-static void android_hardware_Camera_setMetadataCb(JNIEnv *env, jobject thiz, jboolean mode)
+/*static void android_hardware_Camera_setMetadataCb(JNIEnv *env, jobject thiz, jboolean mode)
 {
     ALOGV("setMetadataCb: mode:%d", (int)mode);
+#if defined(QCOM_HARDWARE) && !defined(ICS_CAMERA_BLOB)
     JNICameraContext* context;
     status_t rc;
     sp<Camera> camera = get_native_camera(env, thiz, &context);
@@ -723,7 +724,8 @@ static void android_hardware_Camera_setMetadataCb(JNIEnv *env, jobject thiz, jbo
     if (rc != NO_ERROR) {
         jniThrowException(env, "java/lang/RuntimeException", "set metadata mode failed");
     }
-}
+#endif
+}*/
 
 static void android_hardware_Camera_addCallbackBuffer(JNIEnv *env, jobject thiz, jbyteArray bytes, int msgType) {
     ALOGV("addCallbackBuffer: 0x%x", msgType);
@@ -1020,16 +1022,10 @@ static JNINativeMethod camMethods[] = {
   { "native_setHistogramMode",
     "(Z)V",
      (void *)android_hardware_Camera_setHistogramMode },
-  { "native_setMetadataCb",
-    "(Z)V",
-    (void *)android_hardware_Camera_setMetadataCb },
   { "native_sendHistogramData",
     "()V",
      (void *)android_hardware_Camera_sendHistogramData },
- { "native_setLongshot",
-     "(Z)V",
-      (void *)android_hardware_Camera_setLongshot },
-  { "native_setParameters",
+ { "native_setParameters",
     "(Ljava/lang/String;)V",
     (void *)android_hardware_Camera_setParameters },
   { "native_getParameters",
